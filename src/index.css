@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 33% 98%;
+    --foreground: 20 25% 15%;
+
+    --card: 30 30% 97%;
+    --card-foreground: 20 25% 15%;
+
+    --popover: 40 33% 98%;
+    --popover-foreground: 20 25% 15%;
+
+    --primary: 16 100% 66%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 340 60% 72%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 30 20% 93%;
+    --muted-foreground: 20 10% 50%;
+
+    --accent: 340 60% 72%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 20% 88%;
+    --input: 30 20% 88%;
+    --ring: 16 100% 66%;
+
+    --radius: 1rem;
+
+    --sidebar-background: 40 33% 98%;
+    --sidebar-foreground: 20 25% 15%;
+    --sidebar-primary: 16 100% 66%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 340 60% 72%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 30 20% 88%;
+    --sidebar-ring: 16 100% 66%;
+
+    /* Custom tokens */
+    --coral: 16 100% 66%;
+    --coral-light: 16 100% 85%;
+    --cream: 40 33% 98%;
+    --rose: 340 60% 72%;
+    --rose-light: 340 60% 90%;
+    --warm-brown: 20 25% 15%;
+    --sage: 140 20% 60%;
+    --sage-light: 140 20% 90%;
+  }
+
+  .dark {
+    --background: 20 25% 10%;
+    --foreground: 40 33% 95%;
+    --card: 20 20% 14%;
+    --card-foreground: 40 33% 95%;
+    --popover: 20 20% 14%;
+    --popover-foreground: 40 33% 95%;
+    --primary: 16 100% 66%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 340 60% 72%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 20 15% 20%;
+    --muted-foreground: 30 10% 60%;
+    --accent: 340 60% 72%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 20 15% 22%;
+    --input: 20 15% 22%;
+    --ring: 16 100% 66%;
+    --sidebar-background: 20 25% 10%;
+    --sidebar-foreground: 40 33% 95%;
+    --sidebar-primary: 16 100% 66%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 340 60% 72%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 20 15% 22%;
+    --sidebar-ring: 16 100% 66%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer utilities {
+  .gradient-coral {
+    background: linear-gradient(135deg, hsl(16 100% 66%), hsl(340 60% 72%));
+  }
+  .gradient-soft {
+    background: linear-gradient(180deg, hsl(40 33% 98%), hsl(30 30% 95%));
+  }
+  .text-gradient-coral {
+    background: linear-gradient(135deg, hsl(16 100% 66%), hsl(340 60% 72%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
