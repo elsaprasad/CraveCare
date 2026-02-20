@@ -1,19 +1,25 @@
 import { useState } from 'react';
 import { APPLIANCES, GOALS } from '@/lib/cravecare-data';
 import { UserProfile } from '@/lib/cravecare-data';
-import { ChefHat, ArrowRight, ArrowLeft, Sparkles } from 'lucide-react';
+import { ChefHat, ArrowRight, ArrowLeft, Sparkles, Coins } from 'lucide-react';
 
 interface OnboardingProps {
   onComplete: (profile: UserProfile) => void;
+  /** When set (Supabase auth flow), profile is saved to Supabase by the parent; no localStorage. */
+  userId?: string;
 }
 
-const Onboarding = ({ onComplete }: OnboardingProps) => {
+const BUDGET_PRESETS = [100, 150, 200, 300];
+
+const Onboarding = ({ onComplete, userId }: OnboardingProps) => {
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [appliances, setAppliances] = useState<string[]>([]);
   const [lastPeriodDate, setLastPeriodDate] = useState('');
   const [hasPCOS, setHasPCOS] = useState(false);
   const [primaryGoal, setPrimaryGoal] = useState('');
+  const [dailyBudget, setDailyBudget] = useState(200);
+  const [customBudget, setCustomBudget] = useState('');
 
   const toggleAppliance = (id: string) => {
     setAppliances(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]);
@@ -23,24 +29,35 @@ const Onboarding = ({ onComplete }: OnboardingProps) => {
     if (step === 0) return name.trim().length > 0;
     if (step === 1) return appliances.length > 0;
     if (step === 2) return lastPeriodDate && primaryGoal;
+    if (step === 3) return dailyBudget > 0;
     return true;
   };
 
   const handleFinish = () => {
     const profile: UserProfile = {
       name, appliances, lastPeriodDate, hasPCOS, primaryGoal,
-      dailyBudget: 200, cheatDayProgress: 0,
+      dailyBudget, cheatDayProgress: 0,
     };
-    localStorage.setItem('cravecare-profile', JSON.stringify(profile));
+    if (!userId) {
+      localStorage.setItem('cravecare-profile', JSON.stringify(profile));
+    }
     onComplete(profile);
   };
+
+  const handleCustomBudget = (val: string) => {
+    setCustomBudget(val);
+    const parsed = parseInt(val);
+    if (!isNaN(parsed) && parsed > 0) setDailyBudget(parsed);
+  };
+
+  const TOTAL_STEPS = 4;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Progress */}
       <div className="px-6 pt-8 pb-4">
         <div className="flex gap-2">
-          {[0, 1, 2].map(i => (
+          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
             <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= step ? 'gradient-coral' : 'bg-muted'}`} />
           ))}
         </div>
@@ -97,7 +114,6 @@ const Onboarding = ({ onComplete }: OnboardingProps) => {
               <h1 className="text-3xl font-bold text-foreground mb-2">Health profile 💖</h1>
               <p className="text-muted-foreground text-lg">This helps us sync recipes to your cycle. Everything stays private!</p>
             </div>
-
             <div className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Last period start date</label>
@@ -108,7 +124,6 @@ const Onboarding = ({ onComplete }: OnboardingProps) => {
                   className="w-full px-5 py-4 rounded-2xl bg-card border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
-
               <div className="flex items-center justify-between p-4 rounded-2xl bg-card border border-border">
                 <div>
                   <p className="font-semibold text-foreground">PCOS</p>
@@ -121,7 +136,6 @@ const Onboarding = ({ onComplete }: OnboardingProps) => {
                   <div className={`w-6 h-6 rounded-full bg-primary-foreground shadow-md transition-transform duration-200 ${hasPCOS ? 'translate-x-7' : 'translate-x-1'}`} />
                 </button>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Primary goal</label>
                 <div className="flex flex-wrap gap-2">
@@ -143,6 +157,58 @@ const Onboarding = ({ onComplete }: OnboardingProps) => {
             </div>
           </>
         )}
+
+        {step === 3 && (
+          <>
+            <div className="mt-8 mb-6">
+              <div className="w-16 h-16 rounded-3xl gradient-coral flex items-center justify-center mb-6">
+                <Coins className="text-primary-foreground" size={32} />
+              </div>
+              <h1 className="text-3xl font-bold text-foreground mb-2">Set your daily budget 💰</h1>
+              <p className="text-muted-foreground text-lg">
+                Stay under it to earn <span className="text-primary font-semibold">Cheat Day tokens</span>. Choose healthy hostel-made meals over ordering out to earn tokens — collect 5 tokens = 1 guilt-free cheat day! 🎉
+              </p>
+            </div>
+
+            {/* Presets */}
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {BUDGET_PRESETS.map(b => (
+                <button
+                  key={b}
+                  onClick={() => { setDailyBudget(b); setCustomBudget(''); }}
+                  className={`py-3 rounded-xl text-sm font-semibold transition-all ${
+                    dailyBudget === b && !customBudget
+                      ? 'gradient-coral text-primary-foreground'
+                      : 'bg-card border border-border text-foreground'
+                  }`}
+                >
+                  ₹{b}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom input */}
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">₹</span>
+              <input
+                type="number"
+                value={customBudget}
+                onChange={e => handleCustomBudget(e.target.value)}
+                placeholder="Custom amount..."
+                className="w-full pl-8 pr-5 py-4 rounded-2xl bg-card border border-border text-foreground text-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            {/* How tokens work */}
+            <div className="mt-6 bg-coral-light/30 rounded-2xl p-4 border border-primary/20 space-y-2">
+              <p className="text-sm font-bold text-foreground">How you earn tokens 🪙</p>
+              <p className="text-sm text-muted-foreground">💰 Stay under your daily budget → +1 token</p>
+              <p className="text-sm text-muted-foreground">🥗 Cook a healthy meal → +1 token (max 2/day)</p>
+              <p className="text-sm text-muted-foreground">📊 Log 3+ meals in a day → +1 token</p>
+              <p className="text-sm font-semibold text-primary mt-2">5 tokens = 1 Cheat Day unlocked! 🎊</p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Navigation buttons */}
@@ -156,11 +222,11 @@ const Onboarding = ({ onComplete }: OnboardingProps) => {
           </button>
         )}
         <button
-          onClick={() => step < 2 ? setStep(s => s + 1) : handleFinish()}
+          onClick={() => step < TOTAL_STEPS - 1 ? setStep(s => s + 1) : handleFinish()}
           disabled={!canProceed()}
           className="flex-1 py-4 rounded-2xl gradient-coral text-primary-foreground font-semibold text-lg flex items-center justify-center gap-2 disabled:opacity-40 transition-opacity"
         >
-          {step < 2 ? (
+          {step < TOTAL_STEPS - 1 ? (
             <>Continue <ArrowRight size={20} /></>
           ) : (
             <>Let's Cook! <Sparkles size={20} /></>

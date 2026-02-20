@@ -1,14 +1,17 @@
-import { Home, ScanLine, User } from 'lucide-react';
+import { Home, ScanLine, ShoppingCart, User } from 'lucide-react';
+
+type Tab = 'home' | 'track' | 'grocery' | 'profile';
 
 interface BottomNavProps {
-  activeTab: string;
-  onTabChange: (tab: string) => void;
+  activeTab: Tab;
+  onTabChange: (tab: Tab) => void;
 }
 
 const BottomNav = ({ activeTab, onTabChange }: BottomNavProps) => {
-  const tabs = [
-    { id: 'home', label: 'Home', icon: Home },
-    { id: 'track', label: 'Track', icon: ScanLine },
+  const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
+    { id: 'home',    label: 'Home',    icon: Home },
+    { id: 'track',   label: 'Track',   icon: ScanLine },
+    { id: 'grocery', label: 'Grocery', icon: ShoppingCart },
     { id: 'profile', label: 'Profile', icon: User },
   ];
 

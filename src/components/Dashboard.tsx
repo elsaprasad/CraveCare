@@ -1,23 +1,58 @@
-import { useState, useMemo } from 'react';
-import { UserProfile, getCurrentPhase, PHASES, MOCK_RECIPES, MOM_TIPS, getFallbackRecipe, Recipe } from '@/lib/cravecare-data';
+import { useState, useMemo, useEffect } from 'react';
+import {
+  UserProfile, getCurrentPhase, PHASES, MOCK_RECIPES,
+  MOM_TIPS, getFallbackRecipe, Recipe,
+  loadTokens, loadCheatDays, loadSpends, getTodaySpends, TOKENS_PER_CHEAT_DAY,
+} from '@/lib/cravecare-data';
+import {
+  getSpendEntries, getTokens, getCheatDays, addGroceryItems,
+} from '@/lib/supabase-service';
 import { generateRecipeWithGemini } from '@/lib/gemini-service';
-import { Sparkles, Search, Clock, Flame, X, Loader2 } from 'lucide-react';
+import { Sparkles, Search, Clock, Flame, X, Loader2, Coins, ShoppingCart } from 'lucide-react';
 
 interface DashboardProps {
   profile: UserProfile;
+  userId?: string | null;
+  onNavigateToGrocery?: () => void;
 }
 
-const Dashboard = ({ profile }: DashboardProps) => {
+const Dashboard = ({ profile, userId, onNavigateToGrocery }: DashboardProps) => {
   const [search, setSearch] = useState('');
   const [filterAppliance, setFilterAppliance] = useState<string | null>(null);
   const [aiRecipe, setAiRecipe] = useState<Recipe | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [addingToGrocery, setAddingToGrocery] = useState<string | null>(null);
+  const [groceryToast, setGroceryToast] = useState<string | null>(null);
+
+  const [spends, setSpends] = useState<any[]>(() => (userId ? [] : loadSpends()));
+  const [tokens, setTokens] = useState<any[]>(() => (userId ? [] : loadTokens()));
+  const [cheatDays, setCheatDays] = useState<any[]>(() => (userId ? [] : loadCheatDays()));
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [s, t, c] = await Promise.all([
+          getSpendEntries(userId), getTokens(userId), getCheatDays(userId),
+        ]);
+        if (!cancelled) { setSpends(s); setTokens(t); setCheatDays(c); }
+      } catch { /* keep empty */ }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
 
   const phase = getCurrentPhase(profile.lastPeriodDate);
   const phaseInfo = PHASES[phase];
   const momTip = useMemo(() => MOM_TIPS[Math.floor(Math.random() * MOM_TIPS.length)], []);
+
+  const todaySpends = getTodaySpends(spends);
+  const todayTotal = todaySpends.reduce((a: number, b: any) => a + b.amount, 0);
+  const tokensSpentTotal = cheatDays.reduce((a: number, b: any) => a + (b.tokensSpent ?? 0), 0);
+  const availableTokens = tokens.length - tokensSpentTotal;
+  const remaining = profile.dailyBudget - todayTotal;
 
   const recipes = MOCK_RECIPES.filter(r => {
     const matchesAppliance = !filterAppliance || r.appliance === filterAppliance;
@@ -26,37 +61,49 @@ const Dashboard = ({ profile }: DashboardProps) => {
     return matchesAppliance && ownsAppliance && matchesSearch;
   });
 
+  function showGroceryToast(msg: string) {
+    setGroceryToast(msg);
+    setTimeout(() => setGroceryToast(null), 3500);
+  }
+
+  const handleAddToGrocery = async (recipe: Recipe) => {
+    if (!userId) return;
+    setAddingToGrocery(recipe.id);
+    try {
+      await addGroceryItems(
+        userId,
+        recipe.ingredients.map(ing => ({
+          name: ing,
+          sourceRecipeName: recipe.name,
+          sourceRecipeEmoji: recipe.emoji,
+        }))
+      );
+      showGroceryToast(`🛒 ${recipe.ingredients.length} items added!`);
+    } catch {
+      showGroceryToast('Could not add to list. Try again.');
+    } finally {
+      setAddingToGrocery(null);
+    }
+  };
+
   const handleGenerateAI = async () => {
     const appliance = filterAppliance || profile.appliances[0] || 'kettle';
     setIsGenerating(true);
     setGenerationError(null);
     setAiRecipe(null);
-
     try {
-      // Try to generate with Gemini AI
       const geminiRecipe = await generateRecipeWithGemini({
-        appliance,
-        phase,
-        userPreferences: {
-          hasPCOS: profile.hasPCOS,
-          primaryGoal: profile.primaryGoal,
-          budget: profile.dailyBudget,
-        },
+        appliance, phase,
+        userPreferences: { hasPCOS: profile.hasPCOS, primaryGoal: profile.primaryGoal, budget: profile.dailyBudget },
       });
-
       if (geminiRecipe) {
         setAiRecipe(geminiRecipe);
       } else {
-        // Fallback to hard-coded recipe
-        const fallbackRecipe = getFallbackRecipe(appliance, phase);
-        setAiRecipe(fallbackRecipe);
+        setAiRecipe(getFallbackRecipe(appliance, phase));
         setGenerationError('Using fallback recipe. Add VITE_GEMINI_API_KEY to .env for AI-generated recipes.');
       }
-    } catch (error) {
-      console.error('Error generating recipe:', error);
-      // Use fallback recipe on error
-      const fallbackRecipe = getFallbackRecipe(appliance, phase);
-      setAiRecipe(fallbackRecipe);
+    } catch {
+      setAiRecipe(getFallbackRecipe(appliance, phase));
       setGenerationError('Failed to generate AI recipe. Using fallback recipe.');
     } finally {
       setIsGenerating(false);
@@ -65,6 +112,18 @@ const Dashboard = ({ profile }: DashboardProps) => {
 
   return (
     <div className="pb-24">
+      {/* Grocery toast */}
+      {groceryToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-foreground text-background text-sm font-semibold px-5 py-3 rounded-2xl shadow-xl animate-fade-in flex items-center gap-3 max-w-xs text-center">
+          <span>{groceryToast}</span>
+          {onNavigateToGrocery && (
+            <button onClick={onNavigateToGrocery} className="underline whitespace-nowrap text-xs opacity-80">
+              View →
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Header */}
       <div className="gradient-coral px-6 pt-8 pb-6 rounded-b-3xl">
         <p className="text-primary-foreground/80 text-sm font-medium">Hey, {profile.name}! 👋</p>
@@ -81,6 +140,47 @@ const Dashboard = ({ profile }: DashboardProps) => {
           <p className="text-sm font-medium text-muted-foreground mb-1">Current Need</p>
           <p className="text-lg font-bold text-foreground">You need {phaseInfo.nutrient} 💪</p>
           <p className="text-sm text-muted-foreground mt-2">{phaseInfo.tip}</p>
+        </div>
+
+        {/* Budget + Token Summary */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-card rounded-2xl p-4 border border-border">
+            <p className="text-xs text-muted-foreground mb-1">Today's Budget</p>
+            <p className="text-xl font-bold text-foreground">₹{todayTotal}</p>
+            <p className={`text-xs mt-1 font-medium ${remaining >= 0 ? 'text-sage' : 'text-destructive'}`}>
+              {remaining >= 0 ? `₹${remaining} left` : `₹${Math.abs(remaining)} over`}
+            </p>
+            <div className="w-full h-1.5 bg-muted rounded-full mt-2 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${remaining < 0 ? 'bg-destructive' : 'gradient-coral'}`}
+                style={{ width: `${Math.min((todayTotal / profile.dailyBudget) * 100, 100)}%` }}
+              />
+            </div>
+          </div>
+          <div className="bg-card rounded-2xl p-4 border border-border">
+            <p className="text-xs text-muted-foreground mb-1">Cheat Tokens</p>
+            <div className="flex items-center gap-1.5">
+              <Coins size={18} className="text-primary" />
+              <p className="text-xl font-bold text-foreground">{availableTokens}</p>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {availableTokens >= TOKENS_PER_CHEAT_DAY
+                ? '🎉 Ready to redeem!'
+                : `${TOKENS_PER_CHEAT_DAY - (availableTokens % TOKENS_PER_CHEAT_DAY)} to next cheat day`}
+            </p>
+            <div className="flex gap-1 mt-2">
+              {Array.from({ length: TOKENS_PER_CHEAT_DAY }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`h-1.5 flex-1 rounded-full ${
+                    i < (availableTokens % TOKENS_PER_CHEAT_DAY) ||
+                    (availableTokens >= TOKENS_PER_CHEAT_DAY && availableTokens % TOKENS_PER_CHEAT_DAY === 0)
+                      ? 'bg-primary' : 'bg-muted'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Mom's Tip */}
@@ -108,11 +208,9 @@ const Dashboard = ({ profile }: DashboardProps) => {
             className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
               !filterAppliance ? 'gradient-coral text-primary-foreground' : 'bg-card border border-border text-foreground'
             }`}
-          >
-            All
-          </button>
+          >All</button>
           {profile.appliances.map(a => {
-            const appliance = { kettle: '☕ Kettle', induction: '🍳 Induction', 'sandwich-maker': '🥪 Sandwich', fridge: '❄️ Fridge' }[a];
+            const label: Record<string, string> = { kettle: '☕ Kettle', induction: '🍳 Induction', 'sandwich-maker': '🥪 Sandwich', fridge: '❄️ Fridge' };
             return (
               <button
                 key={a}
@@ -120,9 +218,7 @@ const Dashboard = ({ profile }: DashboardProps) => {
                 className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
                   filterAppliance === a ? 'gradient-coral text-primary-foreground' : 'bg-card border border-border text-foreground'
                 }`}
-              >
-                {appliance}
-              </button>
+              >{label[a]}</button>
             );
           })}
         </div>
@@ -131,20 +227,11 @@ const Dashboard = ({ profile }: DashboardProps) => {
         <button
           onClick={handleGenerateAI}
           disabled={isGenerating}
-          className="w-full py-3.5 rounded-2xl border-2 border-dashed border-primary/40 text-primary font-semibold flex items-center justify-center gap-2 hover:bg-coral-light/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full py-3.5 rounded-2xl border-2 border-dashed border-primary/40 text-primary font-semibold flex items-center justify-center gap-2 hover:bg-coral-light/20 transition-colors disabled:opacity-50"
         >
-          {isGenerating ? (
-            <>
-              <Loader2 size={18} className="animate-spin" /> Generating...
-            </>
-          ) : (
-            <>
-              <Sparkles size={18} /> Generate AI Recipe
-            </>
-          )}
+          {isGenerating ? <><Loader2 size={18} className="animate-spin" /> Generating...</> : <><Sparkles size={18} /> Generate AI Recipe</>}
         </button>
 
-        {/* Error message */}
         {generationError && (
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-3 text-sm text-yellow-800 dark:text-yellow-200">
             {generationError}
@@ -165,15 +252,23 @@ const Dashboard = ({ profile }: DashboardProps) => {
               <span className="flex items-center gap-1"><Clock size={14} /> {aiRecipe.time}</span>
               <span className="flex items-center gap-1"><Flame size={14} /> {aiRecipe.calories} cal</span>
             </div>
-            <p className="text-sm text-foreground mt-3">
-              <strong>Ingredients:</strong> {aiRecipe.ingredients.join(', ')}
-            </p>
+            <p className="text-sm text-foreground mt-3"><strong>Ingredients:</strong> {aiRecipe.ingredients.join(', ')}</p>
             <div className="mt-3">
               <strong className="text-sm text-foreground">Steps:</strong>
               <ol className="list-decimal list-inside text-sm text-muted-foreground mt-1 space-y-1">
                 {aiRecipe.steps.map((s, i) => <li key={i}>{s}</li>)}
               </ol>
             </div>
+            {userId && (
+              <button
+                onClick={() => handleAddToGrocery(aiRecipe)}
+                disabled={addingToGrocery === aiRecipe.id}
+                className="mt-4 w-full py-2.5 rounded-xl border border-primary/30 text-primary text-sm font-semibold flex items-center justify-center gap-2 hover:bg-primary/5 transition-colors disabled:opacity-50"
+              >
+                {addingToGrocery === aiRecipe.id ? <Loader2 size={14} className="animate-spin" /> : <ShoppingCart size={14} />}
+                Add ingredients to grocery list
+              </button>
+            )}
           </div>
         )}
 
@@ -184,23 +279,33 @@ const Dashboard = ({ profile }: DashboardProps) => {
             <p className="text-muted-foreground text-sm py-4 text-center">No recipes match your filters. Try the AI generator! ✨</p>
           )}
           {recipes.map(recipe => (
-            <button
-              key={recipe.id}
-              onClick={() => setSelectedRecipe(recipe)}
-              className="w-full bg-card rounded-2xl p-4 border border-border hover:border-primary/30 transition-all text-left"
-            >
-              <div className="flex items-start gap-3">
-                <span className="text-3xl">{recipe.emoji}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-foreground">{recipe.name}</p>
-                  <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><Clock size={12} /> {recipe.time}</span>
-                    <span className="flex items-center gap-1"><Flame size={12} /> {recipe.calories} cal</span>
-                    <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{recipe.keyNutrient}</span>
+            <div key={recipe.id} className="bg-card rounded-2xl border border-border hover:border-primary/30 transition-all overflow-hidden">
+              <button onClick={() => setSelectedRecipe(recipe)} className="w-full p-4 text-left">
+                <div className="flex items-start gap-3">
+                  <span className="text-3xl">{recipe.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-foreground">{recipe.name}</p>
+                    <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><Clock size={12} /> {recipe.time}</span>
+                      <span className="flex items-center gap-1"><Flame size={12} /> {recipe.calories} cal</span>
+                      <span className="px-2 py-0.5 rounded-full bg-muted">{recipe.keyNutrient}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </button>
+              </button>
+              {userId && (
+                <div className="border-t border-border/60 px-4 py-2.5 flex justify-end">
+                  <button
+                    onClick={() => handleAddToGrocery(recipe)}
+                    disabled={addingToGrocery === recipe.id}
+                    className="text-xs font-semibold text-primary flex items-center gap-1.5 hover:opacity-70 transition-opacity disabled:opacity-40"
+                  >
+                    {addingToGrocery === recipe.id ? <Loader2 size={12} className="animate-spin" /> : <ShoppingCart size={12} />}
+                    Add to grocery list
+                  </button>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </div>
@@ -238,12 +343,23 @@ const Dashboard = ({ profile }: DashboardProps) => {
                 ))}
               </ol>
             </div>
-            <button
-              onClick={() => setSelectedRecipe(null)}
-              className="w-full mt-6 py-3.5 rounded-2xl gradient-coral text-primary-foreground font-semibold"
-            >
-              Got it, let's cook! 🍳
-            </button>
+            <div className="flex gap-3 mt-6">
+              {userId && (
+                <button
+                  onClick={() => { handleAddToGrocery(selectedRecipe); setSelectedRecipe(null); }}
+                  disabled={addingToGrocery === selectedRecipe.id}
+                  className="flex-1 py-3.5 rounded-2xl border-2 border-primary text-primary font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <ShoppingCart size={16} /> Add to list
+                </button>
+              )}
+              <button
+                onClick={() => setSelectedRecipe(null)}
+                className="flex-1 py-3.5 rounded-2xl gradient-coral text-primary-foreground font-semibold"
+              >
+                Let's cook! 🍳
+              </button>
+            </div>
           </div>
         </div>
       )}

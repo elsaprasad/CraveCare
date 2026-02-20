@@ -1,3 +1,25 @@
+import { useState, useMemo } from 'react';
+
+export interface SpendEntry {
+  id: string;
+  label: string;
+  amount: number;
+  timestamp: number; // epoch ms
+  date: string; // YYYY-MM-DD
+}
+
+export interface CheatToken {
+  id: string;
+  reason: string; // e.g. "Under budget", "Healthy meal", "Logging streak"
+  earnedAt: number; // epoch ms
+}
+
+export interface CheatDay {
+  id: string;
+  unlockedAt: number;
+  tokensSpent: number;
+}
+
 export interface UserProfile {
   name: string;
   appliances: string[];
@@ -5,7 +27,86 @@ export interface UserProfile {
   hasPCOS: boolean;
   primaryGoal: string;
   dailyBudget: number;
-  cheatDayProgress: number;
+  cheatDayProgress: number; // legacy, kept for backwards compat
+}
+
+// Token system constants — collect 5 tokens to unlock one guilt-free Cheat Day
+export const TOKENS_PER_CHEAT_DAY = 5;
+export const TOKEN_REWARDS = {
+  UNDER_BUDGET: { tokens: 1, label: '💰 Under budget!' },
+  HEALTHY_MEAL: { tokens: 1, label: '🥗 Healthy meal cooked' },
+  LOGGING_STREAK: { tokens: 1, label: '📊 Logged 3+ meals today' },
+} as const;
+export const MAX_HEALTHY_MEAL_TOKENS_PER_DAY = 2;
+
+// Helpers
+export function todayStr(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+export function loadSpends(): SpendEntry[] {
+  try {
+    const stored = localStorage.getItem('cravecare-spends-v2');
+    return stored ? JSON.parse(stored) : [];
+  } catch { return []; }
+}
+
+export function saveSpends(spends: SpendEntry[]) {
+  localStorage.setItem('cravecare-spends-v2', JSON.stringify(spends));
+}
+
+export function loadTokens(): CheatToken[] {
+  try {
+    const stored = localStorage.getItem('cravecare-tokens');
+    return stored ? JSON.parse(stored) : [];
+  } catch { return []; }
+}
+
+export function saveTokens(tokens: CheatToken[]) {
+  localStorage.setItem('cravecare-tokens', JSON.stringify(tokens));
+}
+
+export function loadCheatDays(): CheatDay[] {
+  try {
+    const stored = localStorage.getItem('cravecare-cheatdays');
+    return stored ? JSON.parse(stored) : [];
+  } catch { return []; }
+}
+
+export function saveCheatDays(days: CheatDay[]) {
+  localStorage.setItem('cravecare-cheatdays', JSON.stringify(days));
+}
+
+export function getSpendsByDate(spends: SpendEntry[], date: string): SpendEntry[] {
+  return spends.filter(s => s.date === date);
+}
+
+export function getTodaySpends(spends: SpendEntry[]): SpendEntry[] {
+  return getSpendsByDate(spends, todayStr());
+}
+
+export function countHealthyMealTokensToday(tokens: CheatToken[]): number {
+  const today = todayStr();
+  return tokens.filter(t =>
+    t.reason === TOKEN_REWARDS.HEALTHY_MEAL.label &&
+    new Date(t.earnedAt).toISOString().split('T')[0] === today
+  ).length;
+}
+
+export function hasEarnedUnderBudgetTokenToday(tokens: CheatToken[]): boolean {
+  const today = todayStr();
+  return tokens.some(t =>
+    t.reason === TOKEN_REWARDS.UNDER_BUDGET.label &&
+    new Date(t.earnedAt).toISOString().split('T')[0] === today
+  );
+}
+
+export function hasEarnedLoggingStreakTokenToday(tokens: CheatToken[]): boolean {
+  const today = todayStr();
+  return tokens.some(t =>
+    t.reason === TOKEN_REWARDS.LOGGING_STREAK.label &&
+    new Date(t.earnedAt).toISOString().split('T')[0] === today
+  );
 }
 
 export interface Recipe {

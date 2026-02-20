@@ -24,7 +24,7 @@ const getEmojiForRecipe = (name: string, phase: MenstrualPhase): string => {
   if (nameLower.includes('chocolate') || nameLower.includes('cocoa')) return '🍫';
   if (nameLower.includes('salad') || nameLower.includes('bowl')) return '🥗';
   if (nameLower.includes('noodles') || nameLower.includes('maggi')) return '🍜';
-  
+
   const phaseEmojis: Record<MenstrualPhase, string> = {
     menstrual: '🌙',
     follicular: '🌱',
@@ -33,6 +33,134 @@ const getEmojiForRecipe = (name: string, phase: MenstrualPhase): string => {
   };
   return phaseEmojis[phase] || '✨';
 };
+
+// --- Rate Limit Helpers ---
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Models tried in order — flash-lite has a higher free-tier quota
+const MODEL_FALLBACK_CHAIN = [
+  "gemini-2.5-flash",
+  "gemini-2.5-pro",
+];
+
+const MAX_RETRIES = 4;
+const BASE_RETRY_DELAY_MS = 2000;
+
+const getRetryDelay = (attempt: number) =>
+  BASE_RETRY_DELAY_MS * Math.pow(2, attempt - 1) + Math.random() * 1000;  // wait 3s before retrying
+
+// --- Internal API Caller ---
+
+async function callGemini(
+  modelId: string,
+  prompt: string,
+  apiKey: string
+): Promise<string | null> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    console.log(`🚀 Calling ${modelId} (attempt ${attempt}/${MAX_RETRIES})...`);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.7,
+        },
+      }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (rawText) return rawText;
+      console.error("❌ Empty response body from Gemini:", data);
+      return null;
+    }
+
+    const errorData = await response.json();
+
+if (response.status === 429) {
+  if (attempt < MAX_RETRIES) {
+    const waitMs = getRetryDelay(attempt);
+    console.warn(`⚠️ Rate limited on ${modelId}. Retrying in ${(waitMs / 1000).toFixed(1)}s... (attempt ${attempt}/${MAX_RETRIES})`);
+    await delay(waitMs);
+    continue;
+  }
+  console.warn(`⚠️ Rate limited on ${modelId}. No retries left — falling back.`);
+  return null;
+}
+
+    // Any other error (400, 403, 500…) — no point retrying
+    console.error(`❌ Gemini API Error ${response.status} on ${modelId}:`, errorData);
+    return null;
+  }
+
+  return null;
+}
+
+// --- Multimodal (image + text) API caller for dish analysis ---
+
+async function callGeminiWithImage(
+  modelId: string,
+  prompt: string,
+  imageBase64: string,
+  mimeType: string,
+  apiKey: string
+): Promise<string | null> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    console.log(`🚀 Calling ${modelId} with image (attempt ${attempt}/${MAX_RETRIES})...`);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inlineData: { mimeType, data: imageBase64 } },
+            { text: prompt },
+          ],
+        }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.5,
+        },
+      }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (rawText) return rawText;
+      console.error("❌ Empty response body from Gemini:", data);
+      return null;
+    }
+
+    const errorData = await response.json();
+
+    if (response.status === 429) {
+      if (attempt < MAX_RETRIES) {
+        const waitMs = getRetryDelay(attempt);
+        console.warn(`⚠️ Rate limited on ${modelId}. Retrying in ${(waitMs / 1000).toFixed(1)}s... (attempt ${attempt}/${MAX_RETRIES})`);
+        await delay(waitMs);
+        continue;
+      }
+      console.warn(`⚠️ Rate limited on ${modelId}. No retries left — falling back.`);
+      return null;
+    }
+
+    console.error(`❌ Gemini API Error ${response.status} on ${modelId}:`, errorData);
+    return null;
+  }
+
+  return null;
+}
 
 // --- Main Service ---
 
@@ -52,7 +180,7 @@ export async function generateRecipeWithGemini(
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
   if (!apiKey) {
-    console.error("❌ VITE_GEMINI_API_KEY missing");
+    console.error("❌ VITE_GEMINI_API_KEY missing from .env");
     return null;
   }
 
@@ -60,21 +188,15 @@ export async function generateRecipeWithGemini(
   const phaseInfo = PHASES[phase];
   const applianceName = getApplianceName(appliance);
 
-  // Use current stable Gemini REST endpoint (v1) for gemini-1.5-flash
-  // Docs: https://ai.google.dev/gemini-api/docs/models
-  const modelId = "gemini-1.5-flash";
-  const url = `https://generativelanguage.googleapis.com/v1/models/${modelId}:generateContent?key=${apiKey}`;
-
-  const prompt = `You are a helpful nutritionist creating recipes for women's health, specifically for menstrual cycle phases.
-
-Create a simple, practical recipe that:
-- Can be made using ONLY a ${applianceName} (no oven, no complex equipment)
-- Is suitable for the ${phaseInfo.name} phase (Days ${phaseInfo.days})
-- Focuses on ${phaseInfo.nutrient} which is needed during this phase
-- Is budget-friendly and uses common Indian ingredients
-- Takes 5-20 minutes to prepare
-- Is suitable for hostel/college students with limited kitchen access
-${userPreferences?.hasPCOS ? '- Is PCOS-friendly (low glycemic index, anti-inflammatory)' : ''}
+  const prompt = `You are a helpful nutritionist creating recipes for women's health.
+Create a simple recipe that:
+- Uses ONLY a ${applianceName}
+- Suitable for the ${phaseInfo.name} phase (Days ${phaseInfo.days})
+- Focuses on ${phaseInfo.nutrient}
+- Budget-friendly Indian ingredients
+- Takes 5-10 minutes
+- 100% of suggested recipes must cost under ₹60 per serving
+${userPreferences?.hasPCOS ? '- Is PCOS-friendly' : ''}
 ${userPreferences?.primaryGoal ? `- Aligns with goal: ${userPreferences.primaryGoal}` : ''}
 
 Return ONLY a valid JSON object in this exact format:
@@ -87,82 +209,125 @@ Return ONLY a valid JSON object in this exact format:
   "steps": ["step 1", "step 2"]
 }`;
 
-  try {
-    console.log(`🚀 Calling Gemini model ${modelId} via v1 REST API...`);
+  // Try each model in order; move to next on rate-limit or failure
+  for (const modelId of MODEL_FALLBACK_CHAIN) {
+    const rawText = await callGemini(modelId, prompt, apiKey);
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
-        generationConfig: {
-          // Ask Gemini to respond as raw JSON
-          responseMimeType: "application/json",
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 1024,
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      let errorBody: unknown = null;
-      try {
-        errorBody = await response.json();
-      } catch {
-        // ignore JSON parse errors
-      }
-      console.error(
-        "❌ Gemini API Error:",
-        response.status,
-        response.statusText,
-        errorBody
-      );
-      return null;
+    if (!rawText) {
+      console.warn(`⏭️ Falling back from ${modelId}...`);
+      continue;
     }
 
-    const data = await response.json();
-    let text: string | undefined =
-      data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      console.error("⚠️ Gemini response had no text content:", data);
-      return null;
+    try {
+      const cleanJson = rawText
+        .replace(/```json\s*/gi, "")
+        .replace(/```\s*/g, "")
+        .trim();
+
+      const recipeData = JSON.parse(cleanJson);
+      console.log(`✅ Recipe generated using ${modelId}`);
+
+      return {
+        id: `gemini-${Date.now()}`,
+        name: recipeData.name || "AI Recipe",
+        appliance,
+        phase,
+        time: recipeData.time || "15 min",
+        calories: Number(recipeData.calories) || 250,
+        keyNutrient: recipeData.keyNutrient || phaseInfo.nutrient,
+        ingredients: recipeData.ingredients || [],
+        steps: recipeData.steps || [],
+        emoji: getEmojiForRecipe(recipeData.name || "", phase),
+      };
+    } catch (err) {
+      console.error(`❌ JSON parse failed for ${modelId} response:`, err);
+      continue;
     }
+  }
 
-    // Clean up potential markdown fences if the model ignored responseMimeType
-    text = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+  console.error("❌ All models exhausted. Could not generate a recipe.");
+  return null;
+}
 
-    const recipeData = JSON.parse(text);
+// --- Dish image analysis (Hostel Grade + upgrade tip) ---
 
-    // Basic validation
-    if (
-      !recipeData.name ||
-      !Array.isArray(recipeData.ingredients) ||
-      !Array.isArray(recipeData.steps)
-    ) {
-      console.error("⚠️ Gemini returned invalid recipe payload:", recipeData);
-      return null;
-    }
+export interface DishGradeResult {
+  grade: string;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  calories?: number;
+  verdict: string;
+  upgradeTip: string;
+}
 
-    return {
-      id: `gemini-${Date.now()}`,
-      name: recipeData.name || "AI Recipe",
-      appliance,
-      phase,
-      time: recipeData.time || "15 min",
-      calories: Number(recipeData.calories) || 250,
-      keyNutrient: recipeData.keyNutrient || phaseInfo.nutrient,
-      ingredients: recipeData.ingredients,
-      steps: recipeData.steps,
-      emoji: getEmojiForRecipe(recipeData.name, phase),
-    };
-  } catch (err) {
-    console.error("❌ Gemini fetch failed:", err);
+const DISH_ANALYSIS_PROMPT = `You are a friendly nutrition coach for young women in India (hostel/college context). Look at this photo of a meal/dish.
+
+Grade it on a "Hostel Grade" scale from A+ down to F: A+ = excellent, balanced, nutritious; A = great; B = good; C = okay; D = poor; F = very poor (e.g. only Maggi or junk). Consider: balance of protein, carbs, fat, fiber, veggies, and how filling/nutritious it looks.
+
+Return ONLY a valid JSON object in this exact format:
+{
+  "grade": "A+" or "A" or "B" or "C" or "D" or "F",
+  "protein": approximate grams (number),
+  "carbs": approximate grams (number),
+  "fat": approximate grams (number),
+  "fiber": approximate grams (number),
+  "calories": approximate calories for this plate (number),
+  "verdict": "One short, warm, encouraging sentence (max 15 words) with an emoji.",
+  "upgradeTip": "One specific, actionable tip to upgrade this exact dish for a better grade (e.g. add a side of cucumber, top with peanuts, swap white rice for brown). Keep it under 20 words."
+}`;
+
+export async function analyzeDishImage(
+  imageBase64: string,
+  mimeType: string = "image/jpeg"
+): Promise<DishGradeResult | null> {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+  if (!apiKey) {
+    console.error("❌ VITE_GEMINI_API_KEY missing from .env");
     return null;
   }
+
+  for (const modelId of MODEL_FALLBACK_CHAIN) {
+    const rawText = await callGeminiWithImage(
+      modelId,
+      DISH_ANALYSIS_PROMPT,
+      imageBase64,
+      mimeType,
+      apiKey
+    );
+
+    if (!rawText) {
+      console.warn(`⏭️ Falling back from ${modelId}...`);
+      continue;
+    }
+
+    try {
+      const cleanJson = rawText
+        .replace(/```json\s*/gi, "")
+        .replace(/```\s*/g, "")
+        .trim();
+
+      const data = JSON.parse(cleanJson);
+      console.log(`✅ Dish grade from ${modelId}`);
+
+      return {
+        grade: data.grade || "C",
+        protein: Number(data.protein) || 0,
+        carbs: Number(data.carbs) || 0,
+        fat: Number(data.fat) || 0,
+        fiber: Number(data.fiber) || 0,
+        calories: Number(data.calories) || 0,
+        verdict: data.verdict || "Looks like a meal!",
+        upgradeTip: data.upgradeTip || "Add some veggies or protein to level up.",
+      };
+    } catch (err) {
+      console.error(`❌ JSON parse failed for dish analysis:`, err);
+      continue;
+    }
+  }
+
+  console.error("❌ All models exhausted. Could not analyze dish image.");
+  return null;
 }
