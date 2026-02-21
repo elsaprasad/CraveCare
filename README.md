@@ -1,125 +1,161 @@
-# CraveCare Companion
+# CraveCare 🎯
 
-A React-based web application for tracking menstrual cycles and providing personalized meal recommendations with limited kitchen appliances.
+**The "Big Sister" App for Hostel Students**
+
+## Basic Details
+
+### Team Name: Atles
+
+### Team Members
+
+* **Elsa Prasad** - Muthoot Institute of Technology and Science
+* **Elna Susan Kuriakose** - Muthoot Institute of Technology and Science
+
+### Hosted Project Link
+
+[Link to your Lovable/Vercel deployment]
+
+### Project Description
+
+CraveCare is a health and nutrition app specifically designed for female students living in hostels or PGs. It helps users manage their nutrition by providing recipes restricted to limited appliances (Kettle/Induction) while syncing their diet with their menstrual cycle phases.
+
+### The Problem statement
+
+Hostel students often face "food poverty"—limited access to kitchen tools, tight budgets, and lack of knowledge on how to eat according to their hormonal health (PCOS, menstrual cramps, etc.), leading to reliance on unhealthy instant noodles or expensive deliveries.
+
+### The Solution
+
+We provide an AI-powered recipe engine that filters by specific hostel appliances and cycle phases. It includes a "Photo-to-Macro" analyzer to grade mess food and a budget tracker to encourage healthy, low-cost cooking.
+
+---
+
+## Technical Details
+
+### Technologies/Components Used
+
+**For Software:**
+
+* **Languages used:** TypeScript, JavaScript, HTML/CSS
+* **Frameworks used:** React (Vite)
+* **Libraries used:** `@google/generative-ai` (Gemini SDK), `lucide-react`, `framer-motion`, `react-router-dom`
+* **Tools used:** VS Code, Git, Google AI Studio (Gemini 1.5 Flash)
+
+---
 
 ## Features
 
-- **Cycle Tracking**: Track and monitor your menstrual cycle
-- **AI-Powered Recipe Generation**: Generate personalized recipes using Google Gemini AI
-- **Fallback Recipes**: Hard-coded recipes available when AI is unavailable
-- **Personalized Meal Plans**: Get meal recommendations synced to your cycle
-- **Limited Equipment Cooking**: Recipes designed for kitchens with minimal appliances
-- **Profile Management**: Customize your profile and preferences
+* **Appliance-Restricted Recipes:** Filters meals that can be made *only* with a Kettle, Induction, or Sandwich Maker.
+* **Cycle-Synced Nutrition:** Automatically calculates menstrual phases and suggests nutrients (e.g., Magnesium during Luteal phase).
+* **AI Food Vision:** Uses Gemini 1.5 Flash to analyze photos of mess food and provide a health grade (A-F).
+* **Budget Tracking:** Keeps track of daily spends to prevent overspending on food delivery.
+* **PCOS-Friendly Toggle:** Filters for low-GI and anti-inflammatory ingredients.
 
-## Tech Stack
+---
 
-This project is built with:
+## Implementation
 
-- **Vite** - Fast build tool and dev server
-- **TypeScript** - Type-safe JavaScript
-- **React** - UI library
-- **shadcn-ui** - Component library
-- **Tailwind CSS** - Utility-first CSS framework
-- **React Router** - Client-side routing
-- **TanStack Query** - Data fetching and caching
+### For Software:
 
-## Getting Started
+#### Installation
 
-### Prerequisites
-
-- Node.js (v18 or higher recommended)
-- npm or yarn
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd cravecare-companion-main
-```
-
-2. Install dependencies:
 ```bash
 npm install
+
 ```
 
-3. (Optional) Set up Gemini AI for recipe generation:
-   - Create a `.env` file in the root directory
-   - Add your Gemini API key: `VITE_GEMINI_API_KEY=your_api_key_here`
-   - Get your API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
-   - See [GEMINI_SETUP.md](./GEMINI_SETUP.md) for detailed instructions
-   - **Note:** The app works without an API key using fallback recipes
+#### Run
 
-4. Start the development server:
 ```bash
+# Add VITE_GEMINI_API_KEY to your .env.local file first
 npm run dev
-```
-
-The application will be available at `http://localhost:8080`
-
-## Available Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run build:dev` - Build in development mode
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
-- `npm run test` - Run tests
-- `npm run test:watch` - Run tests in watch mode
-
-### Mobile App Scripts
-
-- `npm run cap:sync` - Sync web app to native projects
-- `npm run cap:add:ios` - Add iOS platform
-- `npm run cap:add:android` - Add Android platform
-- `npm run cap:open:ios` - Open iOS project in Xcode
-- `npm run cap:open:android` - Open Android project in Android Studio
-- `npm run cap:build` - Build and sync to native projects
-
-## Project Structure
 
 ```
-src/
-├── components/     # React components
-│   ├── ui/        # shadcn-ui components
-│   └── ...        # Feature components
-├── pages/         # Page components
-├── hooks/         # Custom React hooks
-├── lib/           # Utilities and helpers
-└── test/          # Test files
-```
 
-## Mobile App Support
+---
 
-This app is configured for both **PWA (Progressive Web App)** and **Native Mobile Apps**:
+## Project Documentation
 
-- ✅ **PWA**: Installable on phones, works offline, no app store needed
-- ✅ **Native Apps**: Full iOS and Android support via Capacitor
+### For Software:
 
-📱 **See [APP_SETUP.md](./APP_SETUP.md) for detailed mobile app setup instructions.**
+#### Screenshots
 
-### Quick PWA Test:
-1. Build: `npm run build`
-2. Preview: `npm run preview`
-3. Open in browser and look for "Add to Home Screen"
+*Dashboard showing current Menstrual Phase and recommended nutrients.*
 
-## Development
+*AI Recipe Generator filtering for "Electric Kettle" and "Cramp Relief".*
 
-The project uses:
-- **ESLint** for code linting
-- **TypeScript** for type checking
-- **Vitest** for testing
-- **Tailwind CSS** for styling
-- **Vite PWA Plugin** for PWA functionality
-- **Capacitor** for native mobile apps
-- **Google Gemini AI** for AI-powered recipe generation (optional)
+*Food Vision analyzer grading a plate of food based on a photo upload.*
 
-## AI Recipe Generation
+#### Diagrams
 
-The app uses Google Gemini AI to generate personalized recipes. If no API key is configured, it automatically falls back to curated hard-coded recipes.
+**System Architecture:**
 
-📖 **See [GEMINI_SETUP.md](./GEMINI_SETUP.md) for setup instructions.**
+*The frontend sends user parameters (phase/appliance) to the Gemini 1.5 Flash API via a secure service layer, returning structured JSON recipes.*
+
+**Application Workflow:**
+
+*User Onboards -> Selects Appliances -> Input Last Period Date -> Dashboard calculates Phase -> AI Generates Personalized Recipe.*
+
+---
+
+## Additional Documentation
+
+### For Web Projects with Backend:
+
+#### API Documentation (External)
+
+**Google Generative AI (Gemini 1.5 Flash)**
+
+* **Endpoint:** `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`
+* **Purpose:** Used for both structured recipe generation and multimodal image analysis of food.
+
+---
+
+## Project Demo
+
+### Video
+
+[Link to your Loom or YouTube Demo]
+*Demonstrates onboarding, the cycle-tracking dashboard, and the AI generating a kettle-specific recipe.*
+
+---
+
+## AI Tools Used
+
+**Tool Used:** Gemini 1.5 Flash, ChatGPT
+
+**Purpose:**
+* **Gemini 1.5 Flash:** Core engine for recipe logic and image recognition.
+* **ChatGPT:** Assisting with complex TypeScript interfaces and logic debugging.
+
+**Key Prompts Used:**
+
+* "Create a React service to fetch JSON from Gemini API using fetch and v1beta endpoint."
+* "Calculate menstrual phase in JS given a start date and average 28-day cycle."
+* "Style a Tailwind card with Coral and Cream colors for a female-centric health app."
+
+**Percentage of AI-generated code:** Approximately 80%
+
+**Human Contributions:**
+
+* Product strategy and "Hostel Big Sister" branding.
+* Prompt Engineering for specific Indian hostel constraints.
+* UI/UX flow design and color palette selection.
+* Integration of multiple AI streams into a cohesive dashboard.
+* Debugging and making it all work!
+
+---
+
+## Team Contributions
+
+* **Elsa Prasad:** Frontend development, Gemini API integration, and AI Prompt Engineering.
+* **Elna Susan Kuriakose:** UI/UX Design, Logic for cycle phase calculations, and Documentation.
+
+---
 
 ## License
 
-Private project - All rights reserved
+This project is licensed under the MIT License.
+
+---
+
+Made with ❤️ by Elsa and Elna at TinkerHub
