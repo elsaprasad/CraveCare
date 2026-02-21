@@ -81,7 +81,7 @@ npm run dev
 ### For Software:
 
 #### Screenshots
-<img src="screenshots/screenshot.png">
+<img src="screenshots/screenshots.png">
 
 #### Diagrams
 
@@ -112,7 +112,7 @@ npm run dev
 
 ### Video
 
-[Link to your Loom or YouTube Demo]
+https://youtu.be/EULdaeQeCMI
 *Demonstrates onboarding, the cycle-tracking dashboard, and the AI generating a kettle-specific recipe.*
 
 ---
