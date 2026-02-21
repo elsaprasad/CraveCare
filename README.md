@@ -81,7 +81,7 @@ npm run dev
 ### For Software:
 
 #### Screenshots
-<img src="screenshots/1.jpeg">
+<img src="screenshots/crave pics (1).png">
 <img src="screenshots/2.jpeg">
 <img src="screenshots/3.jpeg">
 <img src="screenshots/4.jpeg">
