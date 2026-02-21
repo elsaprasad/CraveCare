@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="./img.png" alt="Project Banner" width="100%">
+</p>
 # CraveCare 🎯
 
 **The "Big Sister" App for Hostel Students**
@@ -13,7 +16,7 @@
 
 ### Hosted Project Link
 
-[Link to your Lovable/Vercel deployment]
+https://cravecaredeply.vercel.app/
 
 ### Project Description
 
@@ -78,12 +81,16 @@ npm run dev
 ### For Software:
 
 #### Screenshots
-
-*Dashboard showing current Menstrual Phase and recommended nutrients.*
-
-*AI Recipe Generator filtering for "Electric Kettle" and "Cramp Relief".*
-
-*Food Vision analyzer grading a plate of food based on a photo upload.*
+<img src=".screenshots/1.png">
+<img src=".screenshots/2.png">
+<img src=".screenshots/3.png">
+<img src=".screenshots/4.png">
+<img src=".screenshots/5.png">
+<img src=".screenshots/6.png">
+<img src=".screenshots/7.png">
+<img src=".screenshots/8.png">
+<img src=".screenshots/9.png">
+<img src=".screenshots/10.png">
 
 #### Diagrams
 
